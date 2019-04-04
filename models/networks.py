@@ -299,8 +299,17 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
         gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
                                         grad_outputs=torch.ones(disc_interpolates.size()).to(device),
                                         create_graph=True, retain_graph=True, only_inputs=True)
+        # print(gradients[0].shape)
         gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
-        gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
+        # print(interpolatesv)
+
+        # print('max: {} - min: {} - mean: {}'.format(interpolatesv.max(), interpolatesv.min(), interpolatesv.mean()))
+
+        # print(gradients.norm(dim=1))
+
+        # print('='*40)
+
+        gradient_penalty = (((gradients).norm(dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
         return gradient_penalty, gradients
     else:
         return 0.0, None
