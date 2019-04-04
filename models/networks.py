@@ -309,11 +309,35 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
         # print('='*40)
 
-        gradient_penalty = (((gradients).norm(dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
+        gradient_penalty = (((gradients).norm(dim=0) - constant) ** 2).mean() * lambda_gp        # added eps
         return gradient_penalty, gradients
     else:
         return 0.0, None
 
+def gradient_penalty(net, real, fake, device, l=10):
+    """ Gradient penalty function from github: EmilienDupont/wgan-gp
+    """
+    batch_size = real.size()[0]
+    alpha = torch.rand(batch_size, 1, 1)
+    alpha = alpha.expand_as(real)
+    alpha = alpha.to(device)
+    print(type(real))
+    print(type(fake))
+    print(type(alpha))
+
+    interpolatev = alpha * real + ((1-alpha) * fake)
+    interpolatev.to(device)
+    interpolatev.requires_grad_(True)
+
+    prob_interpolatedv = net(interpolatev)
+    gradients = torch.autograd.grad(outputs=prob_interpolatedv, inputs=interpolatev,
+                                        grad_outputs=torch.ones(prob_interpolatedv.size()).to(device),
+                                        create_graph=True, retain_graph=True, only_inputs=True)
+
+    gradients = gradients[0].flatten()
+    norm = torch.norm(gradients)
+
+    return l * ((norm - 1) ** 2).mean()
 
 class ResnetGenerator(nn.Module):
     """Resnet-based generator that consists of Resnet blocks between a few downsampling/upsampling operations.
