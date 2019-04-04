@@ -309,7 +309,7 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
         # print('='*40)
 
-        gradient_penalty = (((gradients).norm(dim=0) - constant) ** 2).mean() * lambda_gp        # added eps
+        gradient_penalty = (((gradients).norm(dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
         return gradient_penalty, gradients
     else:
         return 0.0, None
@@ -318,12 +318,10 @@ def gradient_penalty(net, real, fake, device, l=10):
     """ Gradient penalty function from github: EmilienDupont/wgan-gp
     """
     batch_size = real.size()[0]
-    alpha = torch.rand(batch_size, 1, 1)
+    print(real.shape)
+    alpha = torch.rand(batch_size, 1, 1, 1)
     alpha = alpha.expand_as(real)
     alpha = alpha.to(device)
-    print(type(real))
-    print(type(fake))
-    print(type(alpha))
 
     interpolatev = alpha * real + ((1-alpha) * fake)
     interpolatev.to(device)
