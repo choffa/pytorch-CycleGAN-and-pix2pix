@@ -318,7 +318,7 @@ def gradient_penalty(net, real, fake, device, l=10):
     """ Gradient penalty function from github: EmilienDupont/wgan-gp
     """
     batch_size = real.size()[0]
-    print(real.shape)
+    # print(real.shape)
     alpha = torch.rand(batch_size, 1, 1, 1)
     alpha = alpha.expand_as(real)
     alpha = alpha.to(device)
