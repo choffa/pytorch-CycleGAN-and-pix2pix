@@ -101,25 +101,26 @@ class Pix2PixModel(BaseModel):
             self.loss_D_fake = pred_fake.mean()
         else:
             self.loss_D_fake = self.criterionGAN(pred_fake, False)
-        # self.loss_D_fake.backward()
+        self.loss_D_fake.backward()
         # Real
         real_AB = torch.cat((self.real_A, self.real_B), 1)
         pred_real = self.netD(real_AB)
         if self.opt.gan_mode in ['wgangp']:
-            self.loss_D_real = pred_real.mean()
+            self.loss_D_real = -pred_real.mean()
         else:
             self.loss_D_real = self.criterionGAN(pred_real, True)
-        # self.loss_D_real.backward()
+        self.loss_D_real.backward()
         # combine loss and calculate gradients
 
         if self.opt.gan_mode in ['wgangp']:
             self.loss_penalty, _ = networks.cal_gradient_penalty(
                 self.netD, real_AB, fake_AB.detach(), self.device)
-            # self.loss_penalty.backward()
-            self.loss_D = self.loss_D_fake - self.loss_D_real + self.loss_penalty
+            self.loss_penalty.backward(retain_graph=True)
+            self.loss_D = self.loss_D_fake + self.loss_D_real + self.loss_penalty
+            # self.loss_D.backward()
         else:
             self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
-        self.loss_D.backward()
+            self.loss_D.backward()
 
     def backward_G(self):
         """Calculate GAN and L1 loss for the generator"""
