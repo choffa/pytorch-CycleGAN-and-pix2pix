@@ -113,8 +113,8 @@ class Pix2PixModel(BaseModel):
         # combine loss and calculate gradients
 
         if self.opt.gan_mode in ['wgangp']:
-            self.loss_penalty = networks.cal_gradient_penalty(
-                self.netD, real_AB, fake_AB, self.device)
+            self.loss_penalty, _ = networks.cal_gradient_penalty(
+                self.netD, real_AB, fake_AB.detach(), self.device)
             # self.loss_penalty.backward()
             self.loss_D = self.loss_D_fake - self.loss_D_real + self.loss_penalty
         else:
