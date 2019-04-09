@@ -44,6 +44,7 @@ class Pix2PixModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
+        # self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake', 'inception'] if opt.gan_mode in ['wgangp'] else ['G_GAN', 'G_L1', 'D_real', 'D_fake']
         self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake', 'penalty'] if opt.gan_mode in ['wgangp'] else ['G_GAN', 'G_L1', 'D_real', 'D_fake']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         self.visual_names = ['real_A', 'fake_B', 'real_B']
@@ -126,6 +127,17 @@ class Pix2PixModel(BaseModel):
         self.loss_G = self.loss_G_GAN + self.loss_G_L1
         self.loss_G.backward()
 
+    def inception_score(self):
+        print(self.fake_B.size())
+        net = inception_v3(pretrained=True).cuda()
+        scores = []
+        for i in range(int(math.ceil(float(len(self.fake_B)) / float(self.fake_B.size()[0])))):
+            batch = torch.cat(self.fake_B[batch_size*i:batch_size*(i+1)])
+            scores.append(self.net(batch)[0])
+        p_yx = torch.nn.functional.softmax(torch.cat(scores,0),1)
+        p_y = p_yx.mean(0).unsqueeze(0).expand(p_yx.size(0), -1)
+        self.loss_inception = p_yx * (torch.log(p_yx/p_y))
+
     def optimize_parameters(self, n_critic=5):
         self.forward()                   # compute fake images: G(A)
         # update D
@@ -140,3 +152,4 @@ class Pix2PixModel(BaseModel):
         self.optimizer_G.zero_grad()        # set G's gradients to zero
         self.backward_G()                   # calculate graidents for G
         self.optimizer_G.step()             # udpate G's weights
+        self.inception_score()
