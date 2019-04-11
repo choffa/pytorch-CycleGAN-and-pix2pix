@@ -46,7 +46,7 @@ class Pix2PixModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake']
+        self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake', 'penalty', 'difference', 'D', 'G']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         self.visual_names = ['real_A', 'fake_B', 'real_B']
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
@@ -104,6 +104,7 @@ class Pix2PixModel(BaseModel):
         # self.loss_D_fake.backward()
         # Real
         real_AB = torch.cat((self.real_A, self.real_B), 1)
+        self.loss_difference = (fake_AB - real_AB).norm(dim=1).mean()
         pred_real = self.netD(real_AB)
         if self.opt.gan_mode in ['wgangp']:
             self.loss_D_real = pred_real.mean()
