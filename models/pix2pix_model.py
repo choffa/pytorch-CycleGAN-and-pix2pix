@@ -138,13 +138,14 @@ class Pix2PixModel(BaseModel):
         self.loss_G = self.loss_G_GAN + self.loss_G_L1
         self.loss_G.backward()
 
-    def optimize_parameters(self):
+    def optimize_parameters(self, d_iter=1):
         self.forward()                   # compute fake images: G(A)
         # update D
         self.set_requires_grad(self.netD, True)  # enable backprop for D
-        self.optimizer_D.zero_grad()     # set D's gradients to zero
-        self.backward_D()                # calculate gradients for D
-        self.optimizer_D.step()          # update D's weights
+        for _ in range(d_iter):
+            self.optimizer_D.zero_grad()     # set D's gradients to zero
+            self.backward_D()                # calculate gradients for D
+            self.optimizer_D.step()          # update D's weights
         # update G
         # D requires no gradients when optimizing G
         self.set_requires_grad(self.netD, False)
