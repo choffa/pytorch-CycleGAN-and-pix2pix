@@ -1,7 +1,16 @@
 import torch
+import torchvision
 from .base_model import BaseModel
 from . import networks
 
+# Helper class from https://github.com/JoshuaEbenezer/cwgan/blob/master/models/pix2pix_model.py
+class FeatureExtractor(torch.nn.Module):
+    def __init__(self, cnn, feature_layer=11):
+        super(FeatureExtractor, self).__init__()
+        self.features = torch.nn.Sequential(*list(cnn.features.children())[:(feature_layer+1)])
+
+    def forward(self, x):
+        return self.features(x)
 
 class Pix2PixModel(BaseModel):
     """ This class implements the pix2pix model, for learning a mapping from input images to output images given paired data.
@@ -46,7 +55,7 @@ class Pix2PixModel(BaseModel):
         """
         BaseModel.__init__(self, opt)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake', 'penalty', 'difference', 'D', 'G']
+        self.loss_names = ['VGG', 'G_GAN', 'G_L1', 'D_real', 'D_fake', 'penalty', 'difference', 'D', 'G']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
         self.visual_names = ['real_A', 'fake_B', 'real_B']
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
@@ -66,6 +75,8 @@ class Pix2PixModel(BaseModel):
             # define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
             self.criterionL1 = torch.nn.L1Loss()
+            self.criterionMSE = torch.nn.MSELoss()
+            self.feature_extractor = FeatureExtractor(torchvision.models.vgg19(pretrained=True)).to(self.device)
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(
                 self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -104,7 +115,7 @@ class Pix2PixModel(BaseModel):
         # self.loss_D_fake.backward()
         # Real
         real_AB = torch.cat((self.real_A, self.real_B), 1)
-        self.loss_difference = (self.fake_B - self.real_A).norm(dim=1).mean()
+        self.loss_difference = (self.fake_B - self.real_B).norm(dim=1).mean()
         pred_real = self.netD(real_AB)
         if self.opt.gan_mode in ['wgangp']:
             self.loss_D_real = pred_real.mean()
@@ -115,7 +126,7 @@ class Pix2PixModel(BaseModel):
 
         if self.opt.gan_mode in ['wgangp']:
             self.loss_penalty, _ = networks.cal_gradient_penalty(
-                self.netD, real_AB, fake_AB.detach(), self.device)
+                self.netD, real_AB.detach(), fake_AB.detach(), self.device)
             # self.loss_penalty.backward()
             self.loss_D = self.loss_D_fake - self.loss_D_real + self.loss_penalty
         else:
@@ -134,8 +145,12 @@ class Pix2PixModel(BaseModel):
         # Second, G(A) = B
         self.loss_G_L1 = self.criterionL1(
             self.fake_B, self.real_B) * self.opt.lambda_L1
+        # VGG_loss
+        real = self.feature_extractor(self.real_B)
+        fake = self.feature_extractor(self.fake_B)
+        self.loss_VGG = self.criterionMSE(fake, real)
         # combine loss and calculate gradients
-        self.loss_G = - self.loss_G_GAN + self.loss_G_L1
+        self.loss_G = - self.loss_G_GAN + self.loss_G_L1 + self.loss_VGG
         self.loss_G.backward()
 
     def optimize_parameters(self, d_iter=5):
