@@ -112,7 +112,6 @@ class Pix2PixModel(BaseModel):
             self.loss_D_fake = pred_fake.mean()
         else:
             self.loss_D_fake = self.criterionGAN(pred_fake, False)
-        # self.loss_D_fake.backward()
         # Real
         real_AB = torch.cat((self.real_A, self.real_B), 1)
         self.loss_difference = (self.fake_B - self.real_B).norm(dim=1).mean()
@@ -121,13 +120,11 @@ class Pix2PixModel(BaseModel):
             self.loss_D_real = pred_real.mean()
         else:
             self.loss_D_real = self.criterionGAN(pred_real, True)
-        # self.loss_D_real.backward()
         # combine loss and calculate gradients
 
+        self.loss_penalty, _ = networks.cal_gradient_penalty(
+            self.netD, real_AB.detach(), fake_AB.detach(), self.device)
         if self.opt.gan_mode in ['wgangp']:
-            self.loss_penalty, _ = networks.cal_gradient_penalty(
-                self.netD, real_AB.detach(), fake_AB.detach(), self.device)
-            # self.loss_penalty.backward()
             self.loss_D = self.loss_D_fake - self.loss_D_real + self.loss_penalty
         else:
             self.loss_D = (self.loss_D_fake + self.loss_D_real) * 0.5
@@ -138,22 +135,22 @@ class Pix2PixModel(BaseModel):
         # First, G(A) should fake the discriminator
         fake_AB = torch.cat((self.real_A, self.fake_B), 1)
         pred_fake = self.netD(fake_AB)
+        real = self.feature_extractor(self.real_B)
+        fake = self.feature_extractor(self.fake_B)
+        self.loss_VGG = self.criterionMSE(fake, real)
         if self.opt.gan_mode in ['wgangp']:
-            self.loss_G_GAN = pred_fake.mean()
+            # VGG_loss
+            self.loss_G_GAN = - pred_fake.mean() + self.opt.lambda_L1 * self.loss_VGG
         else:
             self.loss_G_GAN = self.criterionGAN(pred_fake, True)
         # Second, G(A) = B
         self.loss_G_L1 = self.criterionL1(
             self.fake_B, self.real_B) * self.opt.lambda_L1
-        # VGG_loss
-        real = self.feature_extractor(self.real_B)
-        fake = self.feature_extractor(self.fake_B)
-        self.loss_VGG = self.criterionMSE(fake, real)
         # combine loss and calculate gradients
-        self.loss_G = - self.loss_G_GAN + self.loss_G_L1 + self.loss_VGG
+        self.loss_G = self.loss_G_GAN + self.loss_G_L1
         self.loss_G.backward()
 
-    def optimize_parameters(self, d_iter=5):
+    def optimize_parameters(self, d_iter=1):
         self.forward()                   # compute fake images: G(A)
         # update D
         self.set_requires_grad(self.netD, True)  # enable backprop for D
