@@ -101,6 +101,15 @@ class Pix2PixModel(BaseModel):
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG(self.real_A)  # G(A)
+        if not self.isTrain:
+            self.PSNR()
+
+    def PSNR(self):
+        mse = ((self.real_B - self.fake_B) ** 2).mean()
+        res = 10 * torch.log10(1/mse)
+        print(res)
+        return res
+
 
     def backward_D(self):
         """Calculate GAN loss for the discriminator"""
