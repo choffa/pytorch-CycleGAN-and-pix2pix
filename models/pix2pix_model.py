@@ -2,6 +2,9 @@ import torch
 import torchvision
 from .base_model import BaseModel
 from . import networks
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import numpy as np
 
 # Helper class from https://github.com/JoshuaEbenezer/cwgan/blob/master/models/pix2pix_model.py
 class FeatureExtractor(torch.nn.Module):
@@ -102,6 +105,7 @@ class Pix2PixModel(BaseModel):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG(self.real_A)  # G(A)
         if not self.isTrain:
+            self.SSIM()
             self.PSNR()
 
     def PSNR(self):
@@ -109,6 +113,47 @@ class Pix2PixModel(BaseModel):
         res = 10 * torch.log10(1/mse)
         print(res)
         return res
+
+    def SSIM(self, L=1, window_size=11, window_sigma=1.5):
+        # t = torch.linspace(-10, 10, window_size)
+        # window = torch.exp(-(t - window_size//2)**2/(2*window_sigma**2))
+        # print(window)
+        # window = window*window.reshape((-1, 1))
+        # window = window / window.sum()
+        window = self.gauss2D()
+
+        new_window = torch.ones(3, 1, window_size, window_size)
+        for i in range(3): new_window[i,0,:,:] = torch.Tensor(window[:,:])
+
+        new_window = new_window.to(self.device)
+        
+
+        exp_real = F.conv2d(self.real_B, new_window, groups=3, padding=window_size//2)
+        exp_fake = F.conv2d(self.fake_B, new_window, groups=3, padding=window_size//2)
+
+        sigma_real = F.conv2d(self.real_B*self.real_B, new_window, groups=3, padding=window_size//2) - exp_real**2
+        sigma_fake = F.conv2d(self.fake_B*self.fake_B, new_window, groups=3, padding=window_size//2) - exp_fake**2
+        sigma      = F.conv2d(self.fake_B*self.real_B, new_window, groups=3, padding=window_size//2) - exp_fake*exp_real
+        
+        c1 = (0.01 * L)**2
+        c2 = (0.03 * L)**2
+
+        ssim = ((2*exp_real*exp_fake+c1)*(2*sigma+c2))/((exp_real**2+exp_fake**2+c1)*(sigma_real+sigma_fake+c2))
+        print(ssim.mean())
+        return ssim.mean()
+
+    def gauss2D(self, shape=(11,11),sigma=1.5):
+        """2D gaussian mask - should give the same result as MATLAB's
+        fspecial('gaussian',[shape],[sigma]) from Stack Overflow
+        """
+        m,n = [(ss-1.)/2. for ss in shape]
+        y,x = np.ogrid[-m:m+1,-n:n+1]
+        h = np.exp( -(x*x + y*y) / (2.*sigma*sigma) )
+        h[ h < np.finfo(h.dtype).eps*h.max() ] = 0
+        sumh = h.sum()
+        if sumh != 0:
+            h /= sumh
+        return h
 
 
     def backward_D(self):
