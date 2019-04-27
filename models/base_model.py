@@ -105,6 +105,9 @@ class BaseModel(ABC):
             self.forward()
             self.compute_visuals()
 
+    def finish_test(self):
+        pass
+
     def compute_visuals(self):
         """Calculate additional output images for visdom and HTML visualization"""
         pass

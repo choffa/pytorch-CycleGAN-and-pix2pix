@@ -66,6 +66,8 @@ class Pix2PixModel(BaseModel):
             self.model_names = ['G', 'D']
         else:  # during test time, only load G
             self.model_names = ['G']
+            self.ssims = []
+            self.psnrs = []
         # define networks (both generator and discriminator)
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
                                       not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
@@ -105,13 +107,12 @@ class Pix2PixModel(BaseModel):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG(self.real_A)  # G(A)
         if not self.isTrain:
-            self.SSIM()
-            self.PSNR()
+            self.ssims.append(float(self.SSIM()))
+            self.psnrs.append(float(self.PSNR()))
 
     def PSNR(self):
         mse = ((self.real_B - self.fake_B) ** 2).mean()
         res = 10 * torch.log10(1/mse)
-        print(res)
         return res
 
     def SSIM(self, L=1, window_size=11, window_sigma=1.5):
@@ -139,7 +140,6 @@ class Pix2PixModel(BaseModel):
         c2 = (0.03 * L)**2
 
         ssim = ((2*exp_real*exp_fake+c1)*(2*sigma+c2))/((exp_real**2+exp_fake**2+c1)*(sigma_real+sigma_fake+c2))
-        print(ssim.mean())
         return ssim.mean()
 
     def gauss2D(self, shape=(11,11),sigma=1.5):
@@ -218,3 +218,10 @@ class Pix2PixModel(BaseModel):
         self.optimizer_G.zero_grad()        # set G's gradients to zero
         self.backward_G()                   # calculate graidents for G
         self.optimizer_G.step()             # udpate G's weights
+    
+    def finish_test(self):
+        ssims = np.array(self.ssims)
+        psnrs = np.array(self.psnrs)
+
+        print('SSIM (avg: {} - std: {})'.format(ssims.mean(), ssims.std()))
+        print('PSNR (avg: {} - std: {})'.format(psnrs.mean(), psnrs.std()))
