@@ -140,7 +140,7 @@ class Pix2PixModel(BaseModel):
         self.loss_VGG = self.criterionMSE(fake, real)
         if self.opt.gan_mode in ['wgangp']:
             # VGG_loss
-            self.loss_G_GAN = - pred_fake.mean() + self.opt.lambda_L1 * self.loss_VGG
+            self.loss_G_GAN = - pred_fake.mean() + self.loss_VGG
         else:
             self.loss_G_GAN = self.criterionGAN(pred_fake, True)
         # Second, G(A) = B
