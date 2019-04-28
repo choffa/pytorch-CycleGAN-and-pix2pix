@@ -66,6 +66,7 @@ class Pix2PixModel(BaseModel):
             self.model_names = ['G', 'D']
         else:  # during test time, only load G
             self.model_names = ['G']
+            # Initialize lists for quality measures
             self.ssims = []
             self.psnrs = []
         # define networks (both generator and discriminator)
@@ -107,31 +108,36 @@ class Pix2PixModel(BaseModel):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG(self.real_A)  # G(A)
         if not self.isTrain:
+            # If test then calculate and append quality measures
             self.ssims.append(float(self.SSIM()))
             self.psnrs.append(float(self.PSNR()))
 
     def PSNR(self):
+        """Calculates the Peak Signal to Noise Ratio using the Mean Squared Error
+        """
         mse = ((self.real_B - self.fake_B) ** 2).mean()
         res = 10 * torch.log10(1/mse)
         return res
 
     def SSIM(self, L=1, window_size=11, window_sigma=1.5):
-        # t = torch.linspace(-10, 10, window_size)
-        # window = torch.exp(-(t - window_size//2)**2/(2*window_sigma**2))
-        # print(window)
-        # window = window*window.reshape((-1, 1))
-        # window = window / window.sum()
+        """Calculates the Structural Similarity using a Gassian filter and convolution
+
+        The code is mostly taken from `here <https://github.com/Po-Hsun-Su/pytorch-ssim/blob/master/pytorch_ssim/__init__.py>`_
+        """
+        # Create gaussian filter
         window = self.gauss2D()
 
+        # Expand filter
         new_window = torch.ones(3, 1, window_size, window_size)
         for i in range(3): new_window[i,0,:,:] = torch.Tensor(window[:,:])
 
         new_window = new_window.to(self.device)
-        
-
+    
+        # Calculate the expectations
         exp_real = F.conv2d(self.real_B, new_window, groups=3, padding=window_size//2)
         exp_fake = F.conv2d(self.fake_B, new_window, groups=3, padding=window_size//2)
 
+        # Calculate variance and covariance
         sigma_real = F.conv2d(self.real_B*self.real_B, new_window, groups=3, padding=window_size//2) - exp_real**2
         sigma_fake = F.conv2d(self.fake_B*self.fake_B, new_window, groups=3, padding=window_size//2) - exp_fake**2
         sigma      = F.conv2d(self.fake_B*self.real_B, new_window, groups=3, padding=window_size//2) - exp_fake*exp_real
@@ -139,12 +145,13 @@ class Pix2PixModel(BaseModel):
         c1 = (0.01 * L)**2
         c2 = (0.03 * L)**2
 
+        # Apply the final SSIM formula and return the mean
         ssim = ((2*exp_real*exp_fake+c1)*(2*sigma+c2))/((exp_real**2+exp_fake**2+c1)*(sigma_real+sigma_fake+c2))
         return ssim.mean()
 
     def gauss2D(self, shape=(11,11),sigma=1.5):
         """2D gaussian mask - should give the same result as MATLAB's
-        fspecial('gaussian',[shape],[sigma]) from Stack Overflow
+        fspecial('gaussian',[shape],[sigma]), code taken from `here <https://stackoverflow.com/questions/17190649/how-to-obtain-a-gaussian-filter-in-python>`_
         """
         m,n = [(ss-1.)/2. for ss in shape]
         y,x = np.ogrid[-m:m+1,-n:n+1]
