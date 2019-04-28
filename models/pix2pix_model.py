@@ -122,7 +122,7 @@ class Pix2PixModel(BaseModel):
     def SSIM(self, L=1, window_size=11, window_sigma=1.5):
         """Calculates the Structural Similarity using a Gassian filter and convolution
 
-        The code is mostly taken from `here <https://github.com/Po-Hsun-Su/pytorch-ssim/blob/master/pytorch_ssim/__init__.py>`_
+        The code is based on `this <https://github.com/Po-Hsun-Su/pytorch-ssim/blob/master/pytorch_ssim/__init__.py>`_
         """
         # Create gaussian filter
         window = self.gauss2D()
@@ -170,7 +170,7 @@ class Pix2PixModel(BaseModel):
         fake_AB = torch.cat((self.real_A, self.fake_B), 1)
         pred_fake = self.netD(fake_AB.detach())
         if self.opt.gan_mode in ['wgangp']:
-            self.loss_D_fake = pred_fake.mean()
+            self.loss_D_fake = pred_fake.mean() # Expectation of fake
         else:
             self.loss_D_fake = self.criterionGAN(pred_fake, False)
         # Real
@@ -178,11 +178,12 @@ class Pix2PixModel(BaseModel):
         self.loss_difference = (self.fake_B - self.real_B).norm(dim=1).mean()
         pred_real = self.netD(real_AB)
         if self.opt.gan_mode in ['wgangp']:
-            self.loss_D_real = pred_real.mean()
+            self.loss_D_real = pred_real.mean() # Expectation of real
         else:
             self.loss_D_real = self.criterionGAN(pred_real, True)
         # combine loss and calculate gradients
 
+        # Calculate Gradient Penalty
         self.loss_penalty, _ = networks.cal_gradient_penalty(
             self.netD, real_AB.detach(), fake_AB.detach(), self.device)
         if self.opt.gan_mode in ['wgangp']:
@@ -196,9 +197,9 @@ class Pix2PixModel(BaseModel):
         # First, G(A) should fake the discriminator
         fake_AB = torch.cat((self.real_A, self.fake_B), 1)
         pred_fake = self.netD(fake_AB)
-        real = self.feature_extractor(self.real_B)
-        fake = self.feature_extractor(self.fake_B)
-        self.loss_VGG = self.criterionMSE(fake, real)
+        real = self.feature_extractor(self.real_B) # Classify real image
+        fake = self.feature_extractor(self.fake_B) # Classify generated image
+        self.loss_VGG = self.criterionMSE(fake, real) # Find class distribution
         if self.opt.gan_mode in ['wgangp']:
             # VGG_loss
             self.loss_G_GAN = - pred_fake.mean() + self.loss_VGG
